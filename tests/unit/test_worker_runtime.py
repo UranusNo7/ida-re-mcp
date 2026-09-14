@@ -3,11 +3,46 @@ from __future__ import annotations
 import argparse
 import threading
 from collections.abc import Mapping
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from ida_re_mcp.worker import runtime
+from ida_re_mcp.worker._ida import IdaModules
 from ida_re_mcp.worker.errors import WorkerError
+
+
+def test_probe_without_database_does_not_claim_hexrays_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_init() -> bool:
+        pytest.fail("未打开数据库时不能用初始化结果判断 Hex-Rays 授权")
+
+    def empty_path(_kind: int) -> None:
+        return None
+
+    def import_idapro(_name: str) -> object:
+        return object()
+
+    api = cast(
+        IdaModules,
+        SimpleNamespace(
+            ida_kernwin=SimpleNamespace(get_kernel_version=lambda: "9.3", is_idaq=lambda: False),
+            ida_loader=SimpleNamespace(PATH_TYPE_IDB=1, get_path=empty_path),
+            ida_hexrays=SimpleNamespace(init_hexrays_plugin=unexpected_init),
+        ),
+    )
+
+    def require_modules(*_names: str) -> IdaModules:
+        return api
+
+    monkeypatch.setattr(runtime.importlib, "import_module", import_idapro)
+    monkeypatch.setattr(runtime, "require_ida", require_modules)
+    report = runtime.probe_runtime()
+    assert report["available"] is True
+    assert report["hexrays_available"] is None
+    assert "尚未打开数据库" in str(report["hexrays_note"])
 
 
 class _FakeIdaPro:

@@ -1945,6 +1945,63 @@ def test_worker_failures_use_stable_public_business_codes(
     asyncio.run(scenario())
 
 
+def test_decompiler_failure_logs_raw_details_and_only_exposes_stable_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        application, workspace, _sample, backend = _application(tmp_path)
+        assert workspace.current_revision is not None
+        raw_details = {
+            "entry": "0x1000",
+            "error_address": "0x1010",
+            "error_code": -12,
+            "reason_code": "MERR_BADCALL",
+            "stage": "decompile",
+            "reason": r"call analysis failed at D:\private\database.i64",
+            "exception_type": "ValueError",
+            "exception": "private internal diagnostic",
+        }
+
+        async def fail(**_kwargs: object) -> JsonObject:
+            raise WorkerError("decompilation_failed", "raw failure", details=raw_details)
+
+        monkeypatch.setattr(backend, "execute_analysis", fail)
+        try:
+            with pytest.raises(ToolExecutionError) as raised:
+                await application.execute_tool(
+                    "function.inspect",
+                    application.tool_input_model_for_test("function.inspect").model_validate(
+                        {
+                            "workspace_id": workspace.workspace_id,
+                            "revision": workspace.current_revision,
+                            "function": {
+                                "kind": "address",
+                                "address": {"kind": "database", "ea": "0x1000"},
+                            },
+                            "views": ["pseudocode"],
+                        }
+                    ),
+                )
+            assert raised.value.code is BusinessErrorCode.EXECUTION_FAILED
+            assert "调用参数分析失败" in raised.value.message
+            assert raised.value.details == {
+                key: value
+                for key, value in raw_details.items()
+                if key not in {"reason", "exception_type", "exception"}
+            }
+            assert "private" not in str(raised.value.details)
+            log = (application.storage.paths.log_root / "service-errors.log").read_text(
+                encoding="utf-8"
+            )
+            assert "call analysis failed" in log and "ValueError" in log
+            assert repr(raw_details["reason"]) in log
+        finally:
+            await application.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_operation_cancel_aborts_refine_and_preserves_current_revision(
     tmp_path: Path,
 ) -> None:

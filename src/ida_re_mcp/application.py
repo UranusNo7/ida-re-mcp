@@ -259,6 +259,7 @@ _WORKER_BUSINESS_ERRORS: dict[str, BusinessErrorCode] = {
     "capability_unavailable": BusinessErrorCode.CAPABILITY_UNAVAILABLE,
     "cursor_stale": BusinessErrorCode.CURSOR_STALE,
     "debug_state_conflict": BusinessErrorCode.DEBUG_STATE_CONFLICT,
+    "decompilation_failed": BusinessErrorCode.EXECUTION_FAILED,
     "policy_denied": BusinessErrorCode.POLICY_DENIED,
     "revision_conflict": BusinessErrorCode.REVISION_CONFLICT,
     "slice_seed_not_found": BusinessErrorCode.UNSUPPORTED,
@@ -269,8 +270,8 @@ _WORKER_BUSINESS_ERRORS: dict[str, BusinessErrorCode] = {
 _WORKER_PUBLIC_MESSAGES: dict[str, str] = {
     "ambiguous_reference": ("这个名称对应多个目标。请改用明确的编号或地址后重试。"),
     "capability_unavailable": (
-        "当前 IDA 安装没有完成这项操作所需的功能。"
-        "如果请求包含伪代码，请确认已经安装并授权 Hex-Rays Decompiler。"
+        "当前 worker 无法提供请求的功能。"
+        "请检查工具支持的运行环境和处理器，并查看 logs 目录中的具体原因。"
     ),
     "cursor_stale": ("分页位置已经失效。请去掉 cursor，从第一页重新查询。"),
     "debug_state_conflict": (
@@ -292,10 +293,55 @@ _WORKER_PUBLIC_MESSAGES: dict[str, str] = {
     "worker_crashed": ("IDA 后台进程意外退出。请查看 logs 目录中的本次运行日志，然后重试。"),
     "worker_timeout": ("IDA 后台处理超时，已经停止。请查看 logs 目录中的本次运行日志，然后重试。"),
 }
+_CAPABILITY_PUBLIC_MESSAGES = {
+    "hexrays": (
+        "当前数据库无法初始化 Hex-Rays。请确认这个处理器和位数有对应的反编译器授权，"
+        "并查看 logs 目录；doctor 只检查 IDA 的基础运行环境。"
+    ),
+    "hexrays_microcode": (
+        "当前数据库无法初始化 Hex-Rays，暂时不能生成数据流分析所需的 microcode。"
+        "请检查这个处理器和位数的反编译器授权，并查看 logs 目录。"
+    ),
+    "ida_runtime": (
+        "worker 无法加载所需的 IDAPython 模块。"
+        "请运行 doctor 检查 ida_dir 和运行环境，并查看 logs 目录。"
+    ),
+    "windows_local_debugger": (
+        "当前环境或目标不满足本机调试要求。"
+        "请使用 Windows 上与 IDB 架构和位数一致的 x86 或 x64 进程，并查看 logs 目录。"
+    ),
+    "windows_memory_maps": "当前环境无法读取 Windows 进程内存映射。请在 Windows 上执行此操作。",
+    "native_architecture": (
+        "当前服务不支持这个处理器或位数。请使用 PE x86/x64 或小端 ELF x86/x64/ARM/AArch64 样本。"
+    ),
+}
+_HEXRAYS_PUBLIC_REASONS = {
+    "MERR_BADCALL": (
+        "调用参数分析失败。请检查失败位置的调用指令、被调用函数原型和调用约定；"
+        "通过 change.prepare 和 change.apply 修正有证据支持的类型后重试。"
+    ),
+    "MERR_BADSP": "栈指针分析失败。请检查失败位置附近的栈指针变化和函数边界。",
+    "MERR_BADFRAME": "函数栈帧不正确。请检查函数边界和栈帧定义，再重新分析。",
+    "MERR_BADBLK": "基本块分析失败。请检查函数边界和指令，再重新分析。",
+    "MERR_HUGESTACK": "栈帧超过反编译器限制。请检查栈帧定义和 Hex-Rays 配置。",
+    "MERR_FUNCSIZE": "函数超过反编译器的大小限制。请检查函数边界和 Hex-Rays 配置。",
+    "MERR_COMPLEX": "函数复杂度超过反编译器限制。请先使用 instructions 和 blocks 视图分析。",
+    "MERR_MEM": "反编译器可用内存不足。请释放内存后重试。",
+    "MERR_CANCELED": "反编译已取消。需要继续时重新发起查询。",
+    "MERR_BUSY": "反编译器正在处理其他操作。请等待当前操作结束后重试。",
+    "MERR_LICENSE": "当前没有可用的反编译器许可证。请检查当前处理器的 Hex-Rays 授权。",
+    "MERR_BADARCH": "反编译器不支持当前处理器。请检查对应的 Hex-Rays 组件和授权。",
+    "MERR_ONLY32": "当前反编译器只支持 32 位函数。请检查数据库位数和反编译器授权。",
+    "MERR_ONLY64": "当前反编译器只支持 64 位函数。请检查数据库位数和反编译器授权。",
+    "MERR_UNKNOWN": (
+        "反编译器未能完成分析。请先使用 instructions 视图检查函数，并查看 logs 目录中的原始诊断。"
+    ),
+}
 _BUSINESS_PUBLIC_MESSAGES: dict[BusinessErrorCode, str] = {
     BusinessErrorCode.AMBIGUOUS_REFERENCE: ("这个引用对应多个目标。请改用明确的编号或地址后重试。"),
     BusinessErrorCode.CAPABILITY_UNAVAILABLE: (
-        "当前 IDA 安装没有完成这项操作所需的功能。请检查工具说明和 IDA 许可证。"
+        "当前服务无法为这个目标提供请求的能力。"
+        "请检查工具说明中的支持范围，并查看 logs 目录中的原因。"
     ),
     BusinessErrorCode.CHANGE_SET_INVALID: (
         "修改内容没有通过检查。请核对 change.prepare 的操作参数；"
@@ -595,6 +641,12 @@ class Application:
             translated = _tool_error(exc)
             if translated is None:
                 raise
+            write_exception_log(
+                self.storage.paths.log_root,
+                context=f"工具 {name} 执行失败",
+                error=exc,
+                details=getattr(exc, "details", None),
+            )
             raise translated from exc
 
     async def list_resources(
@@ -4151,7 +4203,40 @@ def _tool_error(exc: Exception) -> ToolExecutionError | None:
             code,
             _BUSINESS_PUBLIC_MESSAGES[business],
         )
-        return ToolExecutionError(business, message)
+        details: JsonObject = {}
+        capability = exc.details.get("capability")
+        if code == "capability_unavailable" and isinstance(capability, str):
+            if capability in _CAPABILITY_PUBLIC_MESSAGES:
+                message = _CAPABILITY_PUBLIC_MESSAGES[capability]
+                details["capability"] = capability
+        if code == "decompilation_failed" or (
+            code == "capability_unavailable" and "reason_code" in exc.details
+        ):
+            reason_code = exc.details.get("reason_code")
+            if not isinstance(reason_code, str) or reason_code not in _HEXRAYS_PUBLIC_REASONS:
+                reason_code = "MERR_UNKNOWN"
+            details["reason_code"] = reason_code
+            for key in ("entry", "error_address"):
+                value = exc.details.get(key)
+                if (
+                    isinstance(value, str)
+                    and value.startswith("0x")
+                    and 3 <= len(value) <= 18
+                    and all(character in "0123456789abcdef" for character in value[2:])
+                ):
+                    details[key] = value
+            error_code = exc.details.get("error_code")
+            if isinstance(error_code, int) and not isinstance(error_code, bool):
+                details["error_code"] = error_code
+            stage = exc.details.get("stage")
+            if stage in ("decompile", "microcode"):
+                details["stage"] = cast(str, stage)
+            target = f"函数 `{details['entry']}`" if "entry" in details else "目标函数"
+            location = (
+                f"（失败位置 `{details['error_address']}`）" if "error_address" in details else ""
+            )
+            message = f"Hex-Rays 未能分析{target}{location}：{_HEXRAYS_PUBLIC_REASONS[reason_code]}"
+        return ToolExecutionError(business, message, details=details)
     if isinstance(
         exc,
         (

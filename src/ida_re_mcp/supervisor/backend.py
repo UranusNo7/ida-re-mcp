@@ -477,6 +477,7 @@ def _public_probe_result(value: Mapping[str, object]) -> JsonObject:
         "ida_ok",
         "headless",
         "hexrays_available",
+        "hexrays_note",
         "debugger_api_available",
     )
     result: dict[str, object] = {key: value[key] for key in allowed if key in value}

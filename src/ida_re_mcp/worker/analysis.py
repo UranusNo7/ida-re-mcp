@@ -18,6 +18,7 @@ from ida_re_mcp.constants import (
     MAX_GRAPH_NODES,
     MAX_PAGE_SIZE,
 )
+from ida_re_mcp.worker._hexrays import analysis_failure, decompile_function
 from ida_re_mcp.worker._ida import IdaModules, OwnerThreadBound, require_ida
 from ida_re_mcp.worker.errors import CapabilityError, WorkerError, WorkerInputError
 
@@ -1070,25 +1071,7 @@ class AnalysisWorker(OwnerThreadBound):
             page_has_more |= has_more
         cfunc = None
         if views & {"pseudocode", "ctree", "lvars"}:
-            if not api.ida_hexrays.init_hexrays_plugin():
-                raise CapabilityError(
-                    "当前 IDA 许可证或架构没有可用 Hex-Rays decompiler",
-                    capability="hexrays",
-                )
-            try:
-                cfunc = api.ida_hexrays.decompile(entry)
-            except Exception as exc:
-                raise CapabilityError(
-                    "Hex-Rays 无法反编译目标函数",
-                    capability="hexrays_decompile",
-                    details={"entry": _hex(entry), "reason": type(exc).__name__},
-                ) from exc
-            if cfunc is None:
-                raise CapabilityError(
-                    "Hex-Rays 无法反编译目标函数",
-                    capability="hexrays_decompile",
-                    details={"entry": _hex(entry)},
-                )
+            cfunc = decompile_function(api, entry)
         if "pseudocode" in views and cfunc is not None:
             lines, has_more = _bounded_page(
                 (str(api.ida_lines.tag_remove(str(line.line))) for line in cfunc.get_pseudocode()),
@@ -1739,21 +1722,11 @@ class AnalysisWorker(OwnerThreadBound):
                 api.ida_hexrays.MMAT_GENERATED,
             )
         except Exception as exc:
-            raise CapabilityError(
-                "目标函数无法生成 Hex-Rays microcode",
-                capability="hexrays_microcode",
-                details={"reason": type(exc).__name__},
+            raise analysis_failure(
+                api, failure, entry=int(function.start_ea), stage="microcode", exception=exc
             ) from exc
         if mba is None:
-            raise CapabilityError(
-                "目标函数没有可用 Hex-Rays microcode",
-                capability="hexrays_microcode",
-                details={
-                    "error_address": _hex(int(failure.errea)),
-                    "error_code": int(failure.code),
-                    "reason": str(failure.desc()),
-                },
-            )
+            raise analysis_failure(api, failure, entry=int(function.start_ea), stage="microcode")
         program = self._microcode_program(api, mba)
         seed_indexes = [
             instruction.index

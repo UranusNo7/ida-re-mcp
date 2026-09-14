@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal, cast
 
+from ida_re_mcp.worker._hexrays import decompile_function
 from ida_re_mcp.worker._ida import IdaModules, OwnerThreadBound, require_ida
 from ida_re_mcp.worker.errors import CapabilityError, WorkerError, WorkerInputError
 
@@ -350,20 +351,8 @@ class RefineWorker(OwnerThreadBound):
     ) -> None:
         for function in functions:
             api.ida_hexrays.mark_cfunc_dirty(function.entry, False)
-            try:
-                cfunc = api.ida_hexrays.decompile(function.entry)
-                if cfunc is None:
-                    raise RuntimeError("empty decompilation")
-                tuple(cfunc.get_pseudocode())
-            except Exception as exc:
-                raise CapabilityError(
-                    "Hex-Rays 无法反编译 refine 目标函数",
-                    capability="hexrays_decompile",
-                    details={
-                        "entry": _hex(function.entry),
-                        "reason": type(exc).__name__,
-                    },
-                ) from exc
+            cfunc = decompile_function(api, function.entry)
+            tuple(cfunc.get_pseudocode())
 
 
 def _file_sha256(path: Path) -> str:

@@ -380,6 +380,110 @@ async def _wait_operation(
 
 
 @pytest.mark.ida
+def test_real_stdio_call_analysis_failure_keeps_diagnostics_and_static_queries(
+    stdio_runtime_root: Path,
+    ida_environment: dict[str, str],
+    fixture_directory: Path,
+) -> None:
+    async def scenario() -> None:
+        sample = fixture_directory / "native_pe_x64.dll"
+        runtime = stdio_runtime_root / "runtime"
+        async with _official_session(
+            environment=_environment(ida_environment, runtime),
+            stderr_path=stdio_runtime_root / "failure-stdio-stderr.log",
+        ) as client:
+            created = await _call_tool(
+                client, name="workspace.create", arguments={"sample_path": str(sample)}
+            )
+            initialized = await _wait_operation(
+                client, operation_id=cast(str, created["analysis_operation_id"])
+            )
+            workspace_id = cast(str, created["workspace_id"])
+            revision = cast(str, initialized["revision"])
+            searched = await _call_tool(
+                client,
+                name="program.search",
+                arguments={
+                    "workspace_id": workspace_id,
+                    "revision": revision,
+                    "domains": ["function"],
+                    "text_query": "fixture_validate",
+                },
+            )
+            matches = cast(list[JsonObject], searched["matches"])
+            target = cast(JsonObject, matches[0]["address"])
+            arguments: JsonObject = {
+                "workspace_id": workspace_id,
+                "revision": revision,
+                "function": {"kind": "address", "address": target},
+                "views": ["summary", "pseudocode", "calls"],
+            }
+            original = await _call_tool(client, name="function.inspect", arguments=arguments)
+            assert original["pseudocode"]
+            calls = cast(list[JsonObject], original["calls"])
+            callee = cast(JsonObject, calls[0]["target"])
+            prepared = await _call_tool(
+                client,
+                name="change.prepare",
+                arguments={
+                    "workspace_id": workspace_id,
+                    "base_revision": revision,
+                    "operations": [
+                        {
+                            "kind": "set_type",
+                            "target": callee,
+                            "type_ref": {
+                                "kind": "function",
+                                "return_type": {"kind": "primitive", "name": "i32"},
+                                "parameters": [
+                                    {"type": {"kind": "primitive", "name": "i64"}}
+                                    for _ in range(40)
+                                ],
+                            },
+                        }
+                    ],
+                },
+            )
+            applied = await _call_tool(
+                client,
+                name="change.apply",
+                arguments={
+                    "workspace_id": workspace_id,
+                    "expected_revision": revision,
+                    "change_set_id": prepared["change_set_id"],
+                    "digest": prepared["digest"],
+                },
+            )
+            arguments["revision"] = applied["revision"]
+            failed = await client.call_tool("function.inspect", arguments)
+            assert failed.isError is True
+            assert len(failed.content) == 2
+            summary, machine = failed.content
+            assert isinstance(summary, types.TextContent) and isinstance(machine, types.TextContent)
+            failure = json.loads(machine.text)
+            assert failure["code"] == "execution_failed"
+            assert failure["details"] == {
+                "entry": target["ea"],
+                "error_address": cast(JsonObject, calls[0]["source"])["ea"],
+                "error_code": -12,
+                "reason_code": "MERR_BADCALL",
+                "stage": "decompile",
+            }
+            assert "调用参数分析失败" in summary.text
+            assert "change.prepare" in summary.text and "change.apply" in summary.text
+            assert "安装" not in summary.text
+            assert "call analysis failed" not in machine.text
+            arguments["views"] = ["summary", "instructions"]
+            static = await _call_tool(client, name="function.inspect", arguments=arguments)
+            assert static["instructions"]
+        logs = list(runtime.rglob("service-errors.log"))
+        assert logs
+        assert any("call analysis failed" in path.read_text(encoding="utf-8") for path in logs)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.ida
 @pytest.mark.parametrize(
     ("fixture_name", "architecture", "bitness", "image_format", "container"),
     [

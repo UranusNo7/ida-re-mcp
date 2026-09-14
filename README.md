@@ -30,6 +30,9 @@ PE / ELF 文件。当前支持 PE x86/x86-64，以及小端 ELF x86/x86-64/ARM/A
    uv run ida-re-mcp doctor --config config.toml
    ```
 
+   `doctor` 检查 IDA 的基础运行环境。它尚未打开数据库，因此
+   `worker.hexrays_available` 为 `null`；当前处理器的 Hex-Rays 能力会在实际查询时检查。
+
 3. 在你的 Agent 客户端中登记一个 stdio MCP 服务，启动命令为：
 
    ```powershell
@@ -75,6 +78,10 @@ Agent ──stdio/MCP──▶ supervisor ──IPC──▶ IDA headless worker
   apply 成功后才产生新 revision。
 - 工具结果的完整数据在 `structuredContent` 中，附带的中文文本只是摘要；
   出错时第一段文本说明原因和下一步，第二段是 `{code,message,details}` 错误对象。
+- 单个函数反编译失败时，错误会保留 IDA 提供的函数地址、失败位置和 Hex-Rays 错误码。
+  例如 `MERR_BADCALL` 表示调用参数分析失败，应检查调用指令和被调用函数原型；
+  用 `function.inspect` 的 `instructions`、`types` 视图继续检查，原始诊断可在会话日志中找到。
+  `capability_unavailable` 用于当前环境无法提供所需能力的情况，例如缺少对应处理器的授权。
 
 默认配置允许修改 IDB、启动调试、附加外部进程和执行任意 IDAPython。不需要这些
 功能时，在 `config.toml` 的 `[policy]` 中关闭对应选项并重启服务。

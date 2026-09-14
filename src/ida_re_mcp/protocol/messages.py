@@ -40,7 +40,7 @@ _ERROR_NEXT_STEPS: Final = MappingProxyType(
         "revision_not_found": "调用 workspace.get 查看仍然存在的 revision，并改用其中一个版本。",
         "cursor_stale": "去掉 cursor，从第一页重新读取。",
         "ambiguous_reference": "从 details 中选择明确的实体编号或地址后重试。",
-        "capability_unavailable": "运行 doctor 检查 IDA 能力和配置，再决定是否重试。",
+        "capability_unavailable": "按上面的说明检查具体能力、运行环境和授权，再决定是否重试。",
         "unsupported": "检查工具说明、参数和样本格式，改用当前支持的操作。",
         "debug_state_conflict": ("调用 debug.events 查看最新状态；进程暂停时改用最新的 stop_id。"),
         "policy_denied": "检查 config.toml 中的 policy 设置；只有确认风险后才修改策略。",
@@ -50,7 +50,7 @@ _ERROR_NEXT_STEPS: Final = MappingProxyType(
         "change_set_invalid": "重新调用 change.prepare，并把新返回的字段原样传给 change.apply。",
         "precondition_failed": "根据 message 和 details 修正前置条件后重试。",
         "resource_not_found": "重新调用生成文件的工具，并使用它新返回的完整文件地址。",
-        "execution_failed": "运行 doctor 检查配置并查看日志，再根据原因决定是否重试。",
+        "execution_failed": "按上面的失败原因检查目标和输入；内部诊断请查看日志。",
     }
 )
 

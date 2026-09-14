@@ -632,7 +632,7 @@ def test_long_error_reason_keeps_next_step() -> None:
     assert len(summary) <= 2_048
     assert "…" in summary
     assert "下一步：" in summary
-    assert "运行 doctor" in summary
+    assert "检查目标和输入" in summary
     assert "完整的机器错误对象" in summary
 
     operation = success_summary(

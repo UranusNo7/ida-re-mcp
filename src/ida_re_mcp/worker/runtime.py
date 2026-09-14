@@ -46,7 +46,10 @@ def probe_runtime() -> dict[str, object]:
                 "ida_ok": version_parts >= (9, 3),
                 "headless": not bool(api.ida_kernwin.is_idaq()),
                 "idb_path": str(api.ida_loader.get_path(api.ida_loader.PATH_TYPE_IDB)),
-                "hexrays_available": bool(api.ida_hexrays.init_hexrays_plugin()),
+                "hexrays_available": None,
+                "hexrays_note": (
+                    "尚未打开数据库，无法判断当前处理器的反编译能力；Hex-Rays 会在实际查询时检查。"
+                ),
                 "debugger_api_available": True,
             }
         )
