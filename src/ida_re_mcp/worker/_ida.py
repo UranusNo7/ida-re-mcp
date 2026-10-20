@@ -38,7 +38,7 @@ def require_ida(*module_names: str) -> IdaModules:
             loaded[module_name] = importlib.import_module(module_name)
         except (ImportError, OSError) as exc:
             raise CapabilityError(
-                "当前进程没有可用的 IDA Pro 9.3+ IDAPython 运行时",
+                "当前进程没有可用的 IDA Pro 9.2+ IDAPython 运行时",
                 capability="ida_runtime",
                 details={"module": module_name, "reason": type(exc).__name__},
             ) from exc

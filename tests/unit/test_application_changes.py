@@ -251,7 +251,7 @@ class _FakeIdaBackend:
                         and self.cold_sample_sha256 is not None
                         and (
                             self.cold_mismatch_call is None
-                            or self.cold_analysis_calls == self.cold_mismatch_call
+                            or self.cold_analysis_calls >= self.cold_mismatch_call
                         )
                     )
                     else self.sample_sha256
@@ -271,7 +271,7 @@ class _FakeIdaBackend:
                         and self.cold_container is not None
                         and (
                             self.cold_mismatch_call is None
-                            or self.cold_analysis_calls == self.cold_mismatch_call
+                            or self.cold_analysis_calls >= self.cold_mismatch_call
                         )
                     )
                     else "pe"

@@ -303,7 +303,7 @@ class AnalysisWorker(OwnerThreadBound):
         result: dict[str, object] = {
             "checkout_sha256": _file_sha256(self.checkout_path),
             "database_change_count": int(change_count),
-            "backend": "ida-pro-9.3-headless",
+            "backend": "ida-pro-headless",
             "processor": str(api.ida_ida.inf_get_procname()),
         }
         if self.revision is not None:

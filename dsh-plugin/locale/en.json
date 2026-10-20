@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IDA Reverse Engineering",
+    "description": "Connects the local IDA Pro MCP service so the agent can import samples, read disassembly and pseudocode, inspect cross references, and modify IDB data."
+  }
+}

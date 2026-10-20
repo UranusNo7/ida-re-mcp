@@ -20,7 +20,7 @@ from ida_re_mcp.worker.ipc import IpcEndpoint, WorkerHandler, serve_worker
 
 
 def probe_runtime() -> dict[str, object]:
-    """在候选 worker 解释器中探测 IDA 9.3、Python 3.13 与核心能力。"""
+    """在候选 worker 解释器中探测 IDA 9.2+、Python 3.13 与核心能力。"""
 
     result: dict[str, object] = {
         "available": False,
@@ -43,7 +43,7 @@ def probe_runtime() -> dict[str, object]:
         result.update(
             {
                 "ida_kernel_version": kernel_version,
-                "ida_ok": version_parts >= (9, 3),
+                "ida_ok": version_parts >= (9, 2),
                 "headless": not bool(api.ida_kernwin.is_idaq()),
                 "idb_path": str(api.ida_loader.get_path(api.ida_loader.PATH_TYPE_IDB)),
                 "hexrays_available": None,
@@ -205,6 +205,7 @@ def _build_handler(arguments: argparse.Namespace) -> object:
     if kind == "debug":
         from ida_re_mcp.worker.debug import DebugWorker
 
+        require_debugger_supported()
         sample = cast(str | None, arguments.sample)
         if sample is None:
             raise WorkerInputError("debug worker 需要 --sample")
@@ -214,6 +215,20 @@ def _build_handler(arguments: argparse.Namespace) -> object:
             allow_attach=bool(arguments.allow_attach),
         )
     raise AssertionError(kind)
+
+
+def require_debugger_supported() -> None:
+    """IDA 9.2 的 idalib 调试器在关闭进程时会崩溃, 只允许 9.3 及以上版本调试。"""
+
+    api = require_ida("ida_kernwin")
+    version = str(api.ida_kernwin.get_kernel_version())
+    parts = tuple(int(part) for part in version.split(".")[:2])
+    if parts < (9, 3):
+        raise CapabilityError(
+            "当前 IDA 版本不支持动态调试；请使用 IDA Pro 9.3 或更高版本",
+            capability="debugger",
+            details={"ida_kernel_version": version},
+        )
 
 
 def _serve(arguments: argparse.Namespace) -> int:
@@ -260,7 +275,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(
             json.dumps(
                 probe_runtime(),
-                ensure_ascii=False,
+                ensure_ascii=True,
                 allow_nan=False,
                 separators=(",", ":"),
                 sort_keys=True,

@@ -1,0 +1,16 @@
+- insert:
+    - id: ida-re-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: ida_re
+        transport: stdio
+        command: 'D:\python_code\DSH插件\ida-re-mcp\.venv\Scripts\python.exe'
+        args:
+          - -m
+          - ida_re_mcp
+          - serve
+          - --config
+          - config.toml
+        cwd: 'D:\python_code\DSH插件\ida-re-mcp'
+        toolCallTimeoutMs: 3900000
+        failOnStartupError: true

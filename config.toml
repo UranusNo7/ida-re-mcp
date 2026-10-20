@@ -10,8 +10,8 @@ data_root = "data"
 # 相对路径以本 config.toml 所在目录为准；目录不存在时会自动创建。
 log_root = "logs"
 
-# IDA Pro 9.3 的安装目录。IDA 安装在其他位置时只需修改这一项。
-ida_dir = 'C:\Program Files\IDA Professional 9.3'
+# IDA Pro 的安装目录。IDA 安装在其他位置时只需修改这一项。
+ida_dir = 'D:\Tool\IDA'
 
 [policy]
 # 允许 Agent 修改 IDB。每次成功修改都会生成新的分析版本，原版本仍可读取。

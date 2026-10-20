@@ -776,7 +776,7 @@ class Application:
                 "现在可以启动 MCP 服务。"
                 if healthy
                 else (
-                    "请确认 config.toml 中的 ida_dir 指向 IDA Pro 9.3，"
+                    "请确认 config.toml 中的 ida_dir 指向已安装的 IDA Pro，"
                     "再查看 runtime_paths.session_logs 目录下由 "
                     "worker.log_file 指定的探测日志。"
                 )
@@ -3293,18 +3293,39 @@ class Application:
             raise RuntimeError("legacy revision 的 IDA 镜像身份与持久证据冲突")
         return cold_identity
 
-    async def _cold_validate(
+    async def _cold_overview(
         self,
         staging: RevisionStaging,
-        *,
         expected: _ColdImageIdentity,
-    ) -> ColdValidationReceipt:
+    ) -> JsonObject:
+        """IDA 关闭数据库后仍可能短暂占用文件, 冷查询失败或缺少输入身份时重试。"""
+
+        attempts = 5
+        overview: JsonObject | None = None
+        for attempt in range(attempts):
+            try:
+                overview = await self._cold_overview_once(staging)
+            except WorkerError as error:
+                if error.code != "ida_open_failed" or attempt + 1 >= attempts:
+                    raise
+            else:
+                image = overview.get("image")
+                if not isinstance(image, dict) or image.get("sha256") == expected.sample_sha256:
+                    break
+                if attempt + 1 >= attempts:
+                    break
+            await asyncio.sleep(0.25 * (attempt + 1))
+        if overview is None:
+            raise RuntimeError("冷验证未返回可信镜像身份")
+        return overview
+
+    async def _cold_overview_once(self, staging: RevisionStaging) -> JsonObject:
         backend, worker_slot = await self._open_transient_analysis(
             staging.database_path,
             staging.candidate_revision,
         )
         try:
-            overview = await backend.execute(
+            return await backend.execute(
                 operation="program.overview",
                 input={"limit": 1},
                 timeout_seconds=self.config.workers.operation_timeout_seconds,
@@ -3314,11 +3335,23 @@ class Application:
                 await backend.close()
             finally:
                 await worker_slot.release()
+
+    async def _cold_validate(
+        self,
+        staging: RevisionStaging,
+        *,
+        expected: _ColdImageIdentity,
+    ) -> ColdValidationReceipt:
+        overview = await self._cold_overview(staging, expected)
         image = overview.get("image")
         if not isinstance(image, dict):
             raise RuntimeError("冷验证未返回可信镜像身份")
         if image.get("sha256") != expected.sample_sha256:
-            raise RuntimeError("冷验证原样本 SHA-256 与 workspace 身份不一致")
+            raise RuntimeError(
+                "冷验证原样本 SHA-256 与 workspace 身份不一致: "
+                f"expected={expected.sample_sha256} actual={image.get('sha256')} "
+                f"input_name={image.get('input_name')}"
+            )
         architecture = image.get("architecture")
         bitness = image.get("bitness")
         endianness = image.get("endianness")

@@ -16,6 +16,7 @@ from ida_re_mcp.supervisor._python_process import prepare_python_process_launch
 
 def test_python_process_launch_tracks_real_venv_process() -> None:
     executable, environment = prepare_python_process_launch(os.environ)
+    environment["PYTHONIOENCODING"] = "utf-8"
     probe = (
         "import ida_re_mcp,json,mcp,os,sys,sysconfig;"
         "print(json.dumps({"

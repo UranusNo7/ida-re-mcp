@@ -10,7 +10,7 @@ import pytest
 
 from ida_re_mcp.worker import runtime
 from ida_re_mcp.worker._ida import IdaModules
-from ida_re_mcp.worker.errors import WorkerError
+from ida_re_mcp.worker.errors import CapabilityError, WorkerError
 
 
 def test_probe_without_database_does_not_claim_hexrays_is_unavailable(
@@ -43,6 +43,34 @@ def test_probe_without_database_does_not_claim_hexrays_is_unavailable(
     assert report["available"] is True
     assert report["hexrays_available"] is None
     assert "尚未打开数据库" in str(report["hexrays_note"])
+
+
+def test_debugger_requires_ida_9_3(monkeypatch: pytest.MonkeyPatch) -> None:
+    def api_for(version: str) -> IdaModules:
+        return cast(
+            IdaModules,
+            SimpleNamespace(
+                ida_kernwin=SimpleNamespace(get_kernel_version=lambda: version),
+            ),
+        )
+
+    def require_modules_92(*_names: str) -> IdaModules:
+        return api_for("9.2")
+
+    monkeypatch.setattr(runtime, "require_ida", require_modules_92)
+    with pytest.raises(CapabilityError) as raised:
+        runtime.require_debugger_supported()
+    assert raised.value.code == "capability_unavailable"
+    assert raised.value.details == {
+        "capability": "debugger",
+        "ida_kernel_version": "9.2",
+    }
+
+    def require_modules_93(*_names: str) -> IdaModules:
+        return api_for("9.3")
+
+    monkeypatch.setattr(runtime, "require_ida", require_modules_93)
+    runtime.require_debugger_supported()
 
 
 class _FakeIdaPro:

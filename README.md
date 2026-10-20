@@ -1,8 +1,9 @@
 # ida-re-mcp
 
-IDA Pro 9.3+ 的 headless 逆向工程 MCP 服务。任何支持 MCP 的 AI Agent（Codex、
+IDA Pro 9.2+ 的 headless 逆向工程 MCP 服务。任何支持 MCP 的 AI Agent（Codex、
 Claude Code、Kimi CLI 等）都可以通过 stdio 接入，让 Agent 直接驱动 IDA 分析
 PE / ELF 文件。当前支持 PE x86/x86-64，以及小端 ELF x86/x86-64/ARM/AArch64。
+动态调试需要 IDA Pro 9.3+；IDA 9.2 可用于静态分析。
 
 ## 功能
 
@@ -17,7 +18,7 @@ PE / ELF 文件。当前支持 PE x86/x86-64，以及小端 ELF x86/x86-64/ARM/A
 
 ## 要求
 
-- IDA Pro 9.3+ 及有效许可证
+- IDA Pro 9.2+ 及有效许可证；动态调试需要 IDA Pro 9.3+
 - [uv](https://docs.astral.sh/uv/)
 - 读取伪代码需要对应处理器的 Hex-Rays Decompiler；动态调试需要 Windows
 
@@ -58,6 +59,26 @@ PE / ELF 文件。当前支持 PE x86/x86-64，以及小端 ELF x86/x86-64/ARM/A
    默认值和最大值分别为 1 小时和 3 小时。`expert.execute.timeout_seconds`
    可以缩短单次 Expert worker 操作，但不能超过 `operation_timeout_seconds`；
    修改配置后需要重启 MCP 服务。
+
+## 作为 DSH 插件使用
+
+`dsh-plugin/` 是一个只含配置的 DeepSeek Harness bundle：它把本项目注册为
+DSH 的 `ida_re` MCP 服务，工具以 `mcp__ida_re__<tool>` 的形式提供给 Agent。
+它复用当前的 `config.toml`，不复制样本，也不改变本项目的运行方式。
+
+1. 首次使用先准备 Python 环境（已有 `.venv` 可跳过）：
+
+   ```powershell
+   uv sync --locked
+   ```
+
+2. 在 DSH 的插件管理器中安装本地 bundle，目标目录为本仓库的 `dsh-plugin`，
+   安装后启用 `@local/ida-re-mcp`。
+
+3. 新会话中调用任一 `mcp__ida_re__*` 工具确认连接。例如 `workspace.list`。
+
+`dsh-plugin/cordis.patch.yml` 中的 `command` 和 `cwd` 是本机绝对路径；把项目
+移动到其他目录后，需要同步修改这两项并重新安装 bundle。
 
 ## 工作原理
 

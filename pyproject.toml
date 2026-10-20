@@ -1,7 +1,7 @@
 [project]
 name = "ida-re-mcp"
 version = "1.0.0.dev0"
-description = "面向 AI Agent 的 IDA Pro 9.3+ headless 逆向工程 MCP 服务"
+description = "面向 AI Agent 的 IDA Pro headless 逆向工程 MCP 服务"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

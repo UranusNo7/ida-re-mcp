@@ -349,21 +349,9 @@ class SubprocessIdaBackend:
                 "log_file": _PROBE_LOG_NAME,
             }
         try:
-            value: object = json.loads(stdout.decode("utf-8", errors="strict"))
+            value: object = decode_probe_output(stdout)
         except (UnicodeDecodeError, json.JSONDecodeError):
-            await asyncio.to_thread(
-                _write_probe_log,
-                self._log_root,
-                stdout,
-                stderr,
-            )
-            return {
-                "available": False,
-                "code": "worker_probe_invalid_output",
-                "summary": "IDA 检查进程返回了无法读取的结果。",
-                "next_step": "请查看探测日志，并确认 ida_dir 指向 IDA Pro 9.3。",
-                "log_file": _PROBE_LOG_NAME,
-            }
+            value = None
         if not isinstance(value, dict):
             await asyncio.to_thread(
                 _write_probe_log,
@@ -375,7 +363,7 @@ class SubprocessIdaBackend:
                 "available": False,
                 "code": "worker_probe_invalid_output",
                 "summary": "IDA 检查进程返回了无法读取的结果。",
-                "next_step": "请查看探测日志，并确认 ida_dir 指向 IDA Pro 9.3。",
+                "next_step": "请查看探测日志，并确认 ida_dir 指向已安装的 IDA Pro。",
                 "log_file": _PROBE_LOG_NAME,
             }
         parsed = cast(dict[str, object], value)
@@ -454,6 +442,24 @@ class SubprocessIdaBackend:
                 cleanup = asyncio.create_task(asyncio.to_thread(outcome.abort))
                 await _await_cleanup(cleanup)
             raise
+
+
+def decode_probe_output(stdout: bytes) -> object | None:
+    """取探测进程 stdout 中最后一行 JSON。
+
+    IDA 9.2 的 idalib 在导入时会先打印 Qt 迁移提示，因此不能要求整个
+    stdout 只有一段 JSON。
+    """
+
+    for line in reversed(stdout.splitlines()):
+        candidate = line.strip()
+        if not candidate.startswith(b"{"):
+            continue
+        try:
+            return json.loads(candidate)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+    return None
 
 
 def _write_probe_log(log_root: Path, stdout: bytes, stderr: bytes) -> None:

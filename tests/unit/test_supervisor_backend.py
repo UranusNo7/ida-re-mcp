@@ -601,3 +601,21 @@ def test_doctor_writes_raw_probe_error_to_log_without_exposing_it(
         assert sensitive in (log_root / "doctor-probe.log").read_bytes()
 
     asyncio.run(scenario())
+
+
+def test_decode_probe_output_skips_runtime_banner() -> None:
+    stdout = (
+        b"######################################################################\n"
+        b"# Please note that IDA is now using Qt 6\n"
+        b"######################################################################\n"
+        b'{"available":true,"ida_kernel_version":"9.2"}\n'
+    )
+
+    assert backend_module.decode_probe_output(stdout) == {
+        "available": True,
+        "ida_kernel_version": "9.2",
+    }
+
+
+def test_decode_probe_output_returns_none_without_json_line() -> None:
+    assert backend_module.decode_probe_output(b"only a banner\n") is None

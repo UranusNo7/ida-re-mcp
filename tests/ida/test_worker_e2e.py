@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import os
 import shutil
 import subprocess
@@ -13,6 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -28,6 +28,7 @@ from ida_re_mcp.domain.tools import (
     ProgramSearchInput,
     ProgramSearchOutput,
 )
+from ida_re_mcp.supervisor.backend import decode_probe_output
 from ida_re_mcp.supervisor.static_adapter import (
     AnalysisContext,
     adapt_worker_results,
@@ -152,12 +153,14 @@ def test_runtime_probe_is_headless_and_current(
         env=ida_environment,
         timeout=30,
     )
-    result = json.loads(completed.stdout)
+    result = cast(dict[str, object], decode_probe_output(completed.stdout))
     assert result["available"] is True
     assert result["headless"] is True
     assert result["python_ok"] is True
     assert result["ida_ok"] is True
-    assert result["ida_kernel_version"] == "9.3"
+    version_text = str(result["ida_kernel_version"])
+    version_parts = tuple(int(part) for part in version_text.split(".")[:2])
+    assert version_parts >= (9, 2)
 
 
 @pytest.mark.ida

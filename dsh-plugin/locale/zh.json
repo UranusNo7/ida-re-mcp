@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IDA 逆向分析",
+    "description": "连接本机 IDA Pro 的 MCP 服务，让 Agent 可以导入样本、查看反汇编与伪代码、查询交叉引用并修改 IDB。"
+  }
+}

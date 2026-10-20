@@ -48,7 +48,7 @@ class _Arguments:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PRODUCT_NAME,
-        description="让 Codex 等 AI Agent 使用 IDA Pro 9.3+ 分析和修改程序",
+        description="让 Codex 等 AI Agent 使用 IDA Pro 9.2+ 分析和修改程序",
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
 

@@ -47,7 +47,7 @@ def ida_environment() -> dict[str, str]:
         pytest.fail("IDA E2E 要求设置 IDADIR")
     path = Path(install_dir).resolve(strict=True)
     if not (path / "idalib.dll").is_file():
-        pytest.fail("IDADIR 不包含 IDA 9.3 idalib.dll")
+        pytest.fail("IDADIR 不包含 idalib.dll")
     environment = os.environ.copy()
     environment["IDADIR"] = str(path)
     return environment
