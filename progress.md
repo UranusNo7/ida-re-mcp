@@ -72,3 +72,71 @@
 - IDA 9.5 会输出若干 IDAPython 弃用告警（`getseg`、`get_first_seg` 等），只写入
   worker stderr 日志，不影响本次功能。
 
+## 2026-10-24 - Task: 补充 DSH Release 链接安装与发布文档
+
+### What was done
+
+- README 的 DSH 小节改为 Release 安装说明：在 DSH 插件管理器中填 Release
+  资产地址安装，不接受 URL 时下载 `.tgz` 后用绝对路径安装；说明 GitHub 自动
+  生成的 Source code 压缩包不是安装包。
+- 写明安装前置条件（uv、IDA 9.2+ / 动态调试 9.3+、许可证、首次运行联网）和
+  IDADIR 的两种配置方式（MCP 条目环境变量，或平台默认 `config.toml` 的
+  `runtime.ida_dir`），并记录默认安全策略（`debug_attach`、`expert` 关闭）。
+- 保留本机源码 patch 作为本机开发方式，明确它使用本机绝对路径，不能作为其他
+  人的安装教程。
+- 新增 `docs/dsh-release.md`：Release 资产、构建命令与产物、发布步骤、安装、
+  升级和故障排查。
+- 新增 `docs/project-structure.md`：只说明与本次发布和安装相关的模块。
+
+### Testing
+
+- 尚未验证：本地冒烟、Release 上传与远程安装验证由发布流程执行，最终证据待
+  补齐后另外追加记录。
+- 已核对文档事实来源：`scripts/build_dsh_release.py`（选项只有 `--uv`、产物
+  固定写入 `dist/dsh-release`、固定 tag 与 wheel 地址）、
+  `dsh-plugin/package.json`（版本 1.1.0、MIT、files 清单）、
+  `src/ida_re_mcp/config.py`（平台默认路径与默认策略）、
+  `src/ida_re_mcp/cli.py`（serve / doctor / gc）；并检查了当前构建产物
+  `dist/dsh-release/` 的 tgz 成员、生成的 `cordis.patch.yml` 和 `SHA256SUMS`。
+
+### Notes
+
+- 改动文件：`README.md`（只替换 DSH 小节）、新增 `docs/dsh-release.md`、新增
+  `docs/project-structure.md`、`progress.md`（追加本条）。
+- 回滚：还原 README 的 DSH 小节，删除新增的两个 docs 文件，删除本条 progress
+  记录；不修改更早的历史记录。
+- 未执行：git commit / push / tag、GitHub Release 上传、DSH profile 安装变更。
+
+## 2026-10-24 - Task: 记录 DSH Release 本地验收结果
+
+### What was done
+
+- 追加本次 DSH Release 的本地验收记录：最终构建产物、tgz 与 wheel 内容检查、
+  隔离环境真实安装、doctor 检查、官方 MCP 客户端全链路调用和全量测试结果。
+- 远程发布之后才可能验证的部分（真实 Release URL 安装、实际 DSH profile 安装、
+  界面图标渲染）保持待验证，不提前记为成功。
+
+### Testing
+
+- 最终构建 `dist/dsh-release/` 成功，之后不再重建；tgz 含 7 个成员，通过白名单、
+  metadata、图标 XML、无安装脚本、无本机路径检查；wheel 共 70 个文件，不含
+  IDA 运行时、IDA 许可证和样本文件。
+- 在隔离的 pnpm 环境中真实安装 `@local/ida-re-mcp` 1.1.0 成功。
+- 用绝对路径的 uv，从本地 wheel 在仓库外的工作目录、全新 UV 缓存运行
+  `doctor`：`healthy: true`，IDA 9.5，Python 3.13，24 个工具。
+- 用官方 MCP `ClientSession` 经真实 uv stdio 依次调用 initialize、list_tools、
+  `workspace.list`、`workspace.create`（`native_pe_x64.dll`）、`operation.wait`
+  和 `program.overview`，全部通过；`structuredContent` 完整，中文摘要正常，
+  概览返回 13 个函数（IDA 9.5）。
+- 全量 `pytest tests/unit tests/integration`：571 passed。
+- `ruff format --check`（111 files）、`ruff check`、`basedpyright` 均通过，
+  0 error。
+- 尚未验证：GitHub 公开后的真实 URL 安装、实际 DSH profile 中的安装与持久化、
+  图标在界面中的渲染；这些留待远程验收。
+
+### Notes
+
+- 改动文件：仅 `progress.md`（追加本条）；未改动 README、docs 和代码，避免
+  改变 wheel 内容和哈希。
+- 回滚：删除本条 progress 记录；已有文档与构建产物不受影响。
+

@@ -1,8 +1,10 @@
 {
   "name": "@local/ida-re-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
+  "description": "把本机的 ida-re-mcp 注册为 DeepSeek Harness 的 ida_re MCP 服务。",
+  "license": "MIT",
   "exports": {
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
@@ -10,7 +12,9 @@
   "files": [
     "cordis.patch.yml",
     "locale/*.json",
-    "icon.svg"
+    "icon.svg",
+    "README.md",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {

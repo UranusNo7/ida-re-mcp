@@ -62,23 +62,100 @@ PE / ELF 文件。当前支持 PE x86/x86-64，以及小端 ELF x86/x86-64/ARM/A
 
 ## 作为 DSH 插件使用
 
-`dsh-plugin/` 是一个只含配置的 DeepSeek Harness bundle：它把本项目注册为
-DSH 的 `ida_re` MCP 服务，工具以 `mcp__ida_re__<tool>` 的形式提供给 Agent。
-它复用当前的 `config.toml`，不复制样本，也不改变本项目的运行方式。
+Release 提供一个只含配置的 DSH bundle：它把本项目注册为 DSH 的 `ida_re` stdio
+MCP 服务，工具以 `mcp__ida_re__<tool>` 的形式提供给 Agent。bundle 不含 Python
+代码，服务启动时由 uv 从同一次 Release 里固定地址的 wheel 安装并运行，因此
+不需要把本仓库放到某个固定目录。
 
-1. 首次使用先准备 Python 环境（已有 `.venv` 可跳过）：
+### 安装前准备
 
-   ```powershell
-   uv sync --locked
-   ```
+- uv：运行 DSH 的进程要能找到 `uv`。uv 不在 PATH 中时，把 MCP 条目的 `command`
+  改成 uv 可执行文件的绝对路径。
+- IDA Pro 9.2+ 和有效许可证；动态调试需要 IDA Pro 9.3+ 和 Windows。
+- 网络：第一次启动要下载 Python 3.13 和项目依赖，换 Release 版本时也一样。
+  插件不包含 Python 运行时，也不承诺离线可用。
 
-2. 在 DSH 的插件管理器中安装本地 bundle，目标目录为本仓库的 `dsh-plugin`，
-   安装后启用 `@local/ida-re-mcp`。
+### 从 Release 安装
 
-3. 新会话中调用任一 `mcp__ida_re__*` 工具确认连接。例如 `workspace.list`。
+在 DSH 插件管理器中安装这个 Release 资产：
 
-`dsh-plugin/cordis.patch.yml` 中的 `command` 和 `cwd` 是本机绝对路径；把项目
-移动到其他目录后，需要同步修改这两项并重新安装 bundle。
+https://github.com/UranusNo7/ida-re-mcp/releases/download/dsh-v1.1.0/ida-re-mcp-dsh-1.1.0.tgz
+
+安装后启用 `@local/ida-re-mcp`，在新会话中调用任一 `mcp__ida_re__*` 工具
+（例如 `workspace.list`）确认连接。
+
+插件管理器不接受 URL 时，先下载同一个 `.tgz`，再用它的绝对路径安装。GitHub
+Release 页面自动生成的 “Source code (zip / tar.gz)” 是仓库快照，不是安装包，
+不能用来安装。
+
+### 指定 IDA 安装目录
+
+服务不扫描磁盘，也不会猜测 IDA 的位置，必须明确指定：
+
+- 在 DSH 的 MCP 条目环境变量中设置 `IDADIR`，值为 IDA 安装目录；或者
+- 写平台默认配置文件，设置 `runtime.ida_dir`（必须是绝对路径）。Windows 的
+  配置文件是 `%LOCALAPPDATA%\ida-re-mcp\config.toml`：
+
+  ```toml
+  schema_version = "1"
+
+  [runtime]
+  ida_dir = 'D:\Tool\IDA'
+  ```
+
+  macOS 为 `~/Library/Application Support/ida-re-mcp/config.toml`，Linux 为
+  `~/.config/ida-re-mcp/config.toml`。
+
+`IDADIR` 环境变量和 `runtime.ida_dir` 都没有指定时，服务仍能启动，
+`workspace.list` 这类不依赖 IDA 的工具可以正常调用；但 `doctor` 会报告 IDA
+不可用，导入样本、静态分析、修改和调试等依赖 IDA 的操作会失败。
+
+没有配置文件时，服务使用平台用户数据目录和以下默认策略：
+
+- `authoring`、`debug_launch` 开启；
+- `debug_attach`、`expert` 关闭。
+
+需要附加外部进程或执行任意 IDAPython 时，在配置文件的 `[policy]` 中显式开启
+并重启服务。
+
+### 首次启动
+
+第一次连接要下载 Python 3.13 和依赖，可能比 MCP 客户端的启动等待更久。安装后
+先手动运行一次检查，把依赖放进本机缓存：
+
+```powershell
+uv tool run --python 3.13 --from "<bundle 中记录的 wheel 地址>" ida-re-mcp doctor
+```
+
+wheel 地址记录在 bundle 的 `cordis.patch.yml` 和 `README.md` 中（下载 tgz 解开
+即可查看），形如
+`https://github.com/UranusNo7/ida-re-mcp/releases/download/dsh-v1.1.0/ida_re_mcp-1.0.0.dev0-py3-none-any.whl#sha256=...`，
+原样复制即可。输出 `healthy: true` 后再回到 DSH 连接；`doctor` 的
+`runtime_paths` 会列出实际使用的 data、logs 目录。
+
+地址里的 `#sha256=` 只是版本指纹；在 uv 0.13.1 上实测不会强制校验，需要核对
+文件时按 Release 的 `SHA256SUMS` 手动比较。
+
+如果只在 DSH 的 MCP 条目里设置了 `IDADIR`，当前终端没有这个变量，运行 `doctor`
+前先补上，否则它会按缺少 IDA 的默认配置检查：
+
+```powershell
+$env:IDADIR = 'D:\Tool\IDA'
+```
+
+安装后的数据和日志位于平台用户数据目录（Windows 为
+`%LOCALAPPDATA%\ida-re-mcp`），与本仓库源码方式使用的 `data/` 是两套目录，
+不会自动迁移或删除原有数据。
+
+发布和打包细节见 [docs/dsh-release.md](docs/dsh-release.md)，相关模块说明见
+[docs/project-structure.md](docs/project-structure.md)。
+
+### 本机源码开发（仅本机）
+
+`dsh-plugin/` 仍保留本机开发用的配置：先 `uv sync --locked`，把 `dsh-plugin`
+目录安装到 DSH，再启用 `@local/ida-re-mcp`。它的 `command` 和 `cwd` 是本机
+绝对路径，移动仓库后需要同步修改。这种方式不进 Release，也不适合作为其他人
+的安装步骤。
 
 ## 工作原理
 
