@@ -140,3 +140,48 @@
   改变 wheel 内容和哈希。
 - 回滚：删除本条 progress 记录；已有文档与构建产物不受影响。
 
+## 2026-10-24 - Task: 记录 DSH Release 远程最终验收结果
+
+### What was done
+
+- 追加 DSH Release 公开后的最终验收记录：发布提交与 tag、三份 Release 资产、
+  匿名下载校验、公开 wheel 启动检查、用真实 Release tgz 在 DSH 中安装并调用
+  工具，以及验收后恢复本机原有安装。
+- 未改动 README、docs 和发布脚本，也未重新构建；Release 资产保持这次构建的
+  三个文件不变。
+
+### Testing
+
+- 代码提交 `7eca55b` 已 push 到 `main`；annotated tag `dsh-v1.1.0` 已 push。
+- GitHub Release 已公开（`isDraft=false`、`isPrerelease=false`）：
+  https://github.com/UranusNo7/ida-re-mcp/releases/tag/dsh-v1.1.0
+- 这次构建的三份资产固定为：
+  - `ida-re-mcp-dsh-1.1.0.tgz`：
+    `83db92c15760ce585e44f316141b8c07e0c528144b6e2c8ccaf576594bd2ef78`
+  - `ida_re_mcp-1.0.0.dev0-py3-none-any.whl`：
+    `4bf7b70e32a5c39df083597da217f4d81d23be499fee2036b287258436d4b3b8`
+  - `SHA256SUMS`：
+    `9818546ec2fd1c15503cb62da8a1f337dd1919088cb1ecb7a3056bd934cb7157`
+- 不带 Authorization 的匿名 `Invoke-WebRequest` 下载三份资产，逐字节 SHA-256
+  与本地及 GitHub 显示的 digest 一致。
+- 用 uv 从公开 wheel URL（带指纹）运行 `doctor`：`healthy: true`，IDA 9.5，
+  Python 3.13，24 个工具。
+- 在 DSH 中用 `plugin_manager` 以真实 Release `.tgz` URL 安装，
+  `application: applied`，版本 1.1.0。因本机 uv 不在 PATH 且需要保护原数据，
+  测试时只临时替换启动命令中的 uv 绝对路径、`IDADIR` 和隔离的 data/log 目录，
+  未改动 Release 包；随后真实调用 `workspace.list`（空）、`workspace.create`
+  （`native_pe_x64.dll`）、`operation.wait`（succeeded）和 `program.overview`
+  （13 个函数、11 个字符串、8 个导出），全部成功。
+- 验收后移除试装的 tarball：同版本直接替换曾报 already-installed，按提示先
+  remove 再 install 原 local 目录成功；移除临时 override，`application: applied`，
+  `workspace.list` 再次返回原有 2 个项目，原 data/logs 未删除。
+- 唯一未验证项：界面中的图标渲染（Tabbit CLI 注册不可用）；发布包内的图标 XML
+  和 locale 资源已验证。
+
+### Notes
+
+- 改动文件：仅 `progress.md`（追加本条）；未触碰 README、docs、发布脚本，也未
+  重新构建或修改 Release 资产。
+- 回滚：删除本条 progress 记录；提交与 Release 不受影响。
+- 本条记录之后由 lead 提交第二笔文档与日志改动，不改动 tag 和已上传资产。
+
